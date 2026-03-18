@@ -352,6 +352,16 @@ var _opened = false;
 var _startT = 0;
 var _cdT    = null;
 var _claimed= false;
+var _leftTab= false; // đã rời tab sang link chưa
+var _leftCount=0;    // số lần rời tab
+
+// Theo dõi user có thực sự rời tab xem link không
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden&&_opened){
+    _leftTab=true;
+    _leftCount++;
+  }
+});
 
 // ── ANTI-CHEAT: Phát hiện DevTools ──
 (function(){
@@ -480,9 +490,19 @@ function doOpenAndContinue(){
   if(!_opened){
     alert('⚠️ Bạn chưa mở link nhiệm vụ!');return;
   }
+  // Check đã rời tab chưa
+  if(!_leftTab){
+    alert('❌ Bạn chưa thực sự xem link!\nVui lòng mở link và xem xong rồi quay lại.');return;
+  }
+  // Check đủ thời gian
+  var elapsed=(Date.now()-_startT)/1000;
+  var required=_p.wait||15;
+  if(elapsed<required){
+    var remain=Math.ceil(required-elapsed);
+    alert('⏳ Bạn xem quá nhanh!\nCần xem thêm '+remain+' giây nữa.');return;
+  }
   var btn=g('btn-continue');
-  btn.disabled=true;
-  btn.innerHTML='Đang xác minh...';
+  if(btn){btn.disabled=true;btn.innerHTML='Đang xác minh...';}
   goSec('sec2');
   startVerify();
 }
@@ -495,9 +515,9 @@ function startVerify(){
   });
   var allPass=true;
 
-  // Check 1: đã mở link
+  // Check 1: đã mở link VÀ đã rời tab
   setTimeout(function(){
-    if(_opened){cok('c1');}else{cfail('c1');allPass=false;}
+    if(_opened&&_leftTab){cok('c1');}else{cfail('c1');allPass=false;}
   },700);
 
   // Check 2: đủ thời gian
