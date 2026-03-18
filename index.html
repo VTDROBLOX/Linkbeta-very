@@ -234,30 +234,39 @@ body::after{
     <!-- SEC 1: CHỜ ĐẾM NGƯỢC -->
     <div class="sec on" id="sec1">
       <div class="notice">
-        <span>⚡</span>
-        <span>Đợi <b id="wait-num">15</b> giây để xác nhận bạn đã xem quảng cáo. <b>Không tắt trang này!</b></span>
+        <span>⚠️</span>
+        <span>Bấm nút bên dưới để <b>mở link nhiệm vụ</b>. Sau khi xem xong, quay lại trang này và bấm <b>"Đã xem xong"</b> để nhận thưởng.</span>
       </div>
-      <div class="cd-wrap">
-        <div class="ring-wrap">
-          <svg class="ring-svg" width="110" height="110" viewBox="0 0 110 110">
-            <circle class="ring-bg" cx="55" cy="55" r="45"/>
-            <circle class="ring-fg" id="ring" cx="55" cy="55" r="45"/>
-          </svg>
-          <div class="ring-center">
-            <div class="ring-num" id="cdn" style="color:var(--gold);">15</div>
-            <div class="ring-lbl">giây</div>
+      <button class="btn btn-gold" id="btn-open" onclick="doOpenLink()" style="margin-bottom:10px;">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Mở link nhiệm vụ
+      </button>
+      <div id="sec1-after" style="display:none;">
+        <div class="notice" style="background:rgba(46,204,113,.07);border-color:rgba(46,204,113,.2);margin-bottom:10px;">
+          <span>✅</span>
+          <span>Đã mở link! Vui lòng xem xong rồi quay lại đây. Đang đếm ngược <b id="wait-num2">15</b> giây...</span>
+        </div>
+        <div class="cd-wrap">
+          <div class="ring-wrap">
+            <svg class="ring-svg" width="110" height="110" viewBox="0 0 110 110">
+              <circle class="ring-bg" cx="55" cy="55" r="45"/>
+              <circle class="ring-fg" id="ring" cx="55" cy="55" r="45"/>
+            </svg>
+            <div class="ring-center">
+              <div class="ring-num" id="cdn" style="color:var(--gold);">15</div>
+              <div class="ring-lbl">giây</div>
+            </div>
           </div>
         </div>
-        <div class="cd-msg">Đang xem quảng cáo...<br><b style="color:var(--text);">Vui lòng không đóng tab này</b></div>
+        <div class="prog-wrap">
+          <div class="prog-label"><span>Tiến độ xác minh</span><span id="prog-pct">0%</span></div>
+          <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
+        </div>
+        <button class="btn btn-gold" id="btn-continue" disabled onclick="doOpenAndContinue()">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+          <span id="btn-txt">Đã xem xong, tiếp tục</span>
+        </button>
       </div>
-      <div class="prog-wrap">
-        <div class="prog-label"><span>Tiến độ</span><span id="prog-pct">0%</span></div>
-        <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
-      </div>
-      <button class="btn btn-gold" id="btn-continue" disabled onclick="doOpenAndContinue()">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        <span id="btn-txt">Tiếp tục (15s)</span>
-      </button>
     </div>
 
     <!-- SEC 2: KIỂM TRA BẢO MẬT -->
@@ -401,18 +410,9 @@ window.onload=function(){
   g('r-amt').textContent   ='+'+_p.reward.toLocaleString('vi-VN')+'đ';
   g('wait-num').textContent=_p.wait;
   g('cdn').textContent     =_p.wait;
-  g('btn-txt').textContent ='Tiếp tục ('+_p.wait+'s)';
+  g('btn-txt').textContent ='Mở link nhiệm vụ →';
 
-  // Khởi động đếm ngược
-  startCountdown();
-  // Mở link quảng cáo ngay lập tức trong tab mới
-  setTimeout(function(){
-    if(_p.url){
-      window.open(_p.url,'_blank','noopener,noreferrer');
-      _opened=true;
-      _startT=Date.now();
-    }
-  },500);
+  // KHÔNG tự mở popup (mobile block) — để user bấm nút mở
 };
 
 // ── Đếm ngược ──
@@ -421,9 +421,9 @@ function startCountdown(){
   var secs=total;
   var circ=283;
   var ring=g('ring');
-  ring.style.strokeDashoffset=circ; // bắt đầu từ 0% fill
+  if(!ring)return;
+  ring.style.strokeDashoffset=circ;
   var cdEl=g('cdn');
-  var btnTxt=g('btn-txt');
   var progFill=g('prog-fill');
   var progPct=g('prog-pct');
 
@@ -431,29 +431,55 @@ function startCountdown(){
   _cdT=setInterval(function(){
     secs--;
     if(secs<0)secs=0;
-    // Ring fill dần (từ 0 → 100%)
     var pct=(total-secs)/total;
     ring.style.strokeDashoffset=circ-(circ*pct);
-    // Màu thay đổi khi gần xong
-    if(secs<=5){ring.style.stroke='#2ECC71';cdEl.style.color='#2ECC71';}
-    cdEl.textContent=secs;
-    btnTxt.textContent='Tiếp tục ('+(secs>0?secs:'')+(secs>0?'s':' ✓')+')';
-    // Progress bar
+    if(secs<=5){ring.style.stroke='#2ECC71';if(cdEl)cdEl.style.color='#2ECC71';}
+    if(cdEl)cdEl.textContent=secs;
     var p=Math.round(pct*100);
-    progFill.style.width=p+'%';
-    progPct.textContent=p+'%';
+    if(progFill)progFill.style.width=p+'%';
+    if(progPct)progPct.textContent=p+'%';
 
     if(secs<=0){
       clearInterval(_cdT);
       var btn=g('btn-continue');
-      btn.disabled=false;
-      btn.innerHTML='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg> Tiếp tục →';
+      if(btn){
+        btn.disabled=false;
+        btn.innerHTML='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> ✅ Đã xem xong, nhận thưởng!';
+      }
     }
   },1000);
 }
 
-// ── Nút tiếp tục ──
+// ── Bước 1: User bấm mở link ──
+function doOpenLink(){
+  var btn=g('btn-open');
+  if(btn){btn.disabled=true;btn.innerHTML='✅ Đã mở link...';}
+
+  // Mở link trong tab mới — DO USER CLICK nên mobile không block
+  var newTab=window.open(_p.url,'_blank','noopener,noreferrer');
+  if(!newTab){
+    // Fallback nếu bị block: mở trực tiếp
+    window.location.href=_p.url;
+  }
+  _opened=true;
+  _startT=Date.now();
+
+  // Hiện phần đếm ngược
+  var after=g('sec1-after');
+  if(after)after.style.display='block';
+  var wn=g('wait-num2');
+  if(wn)wn.textContent=_p.wait;
+  var cdn=g('cdn');
+  if(cdn)cdn.textContent=_p.wait;
+
+  startCountdown();
+}
+
+// ── Bước 2: User bấm "Đã xem xong" ──
 function doOpenAndContinue(){
+  if(!_opened){
+    alert('⚠️ Bạn chưa mở link nhiệm vụ!');return;
+  }
   var btn=g('btn-continue');
   btn.disabled=true;
   btn.innerHTML='Đang xác minh...';
