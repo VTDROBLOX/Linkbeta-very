@@ -231,42 +231,33 @@ body::after{
       </div>
     </div>
 
-    <!-- SEC 1: CHỜ ĐẾM NGƯỢC -->
+    <!-- SEC 1: ĐẾM NGƯỢC (link đã mở tab mới rồi) -->
     <div class="sec on" id="sec1">
-      <div class="notice">
-        <span>⚠️</span>
-        <span>Bấm nút bên dưới để <b>mở link nhiệm vụ</b>. Sau khi xem xong, quay lại trang này và bấm <b>"Đã xem xong"</b> để nhận thưởng.</span>
+      <div class="notice" style="background:rgba(46,204,113,.07);border-color:rgba(46,204,113,.2);">
+        <span>✅</span>
+        <span>Link nhiệm vụ đã mở ở tab mới. <b>Vui lòng xem xong</b> rồi bấm nút bên dưới để nhận thưởng.</span>
       </div>
-      <button class="btn btn-gold" id="btn-open" onclick="doOpenLink()" style="margin-bottom:10px;">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-        Mở link nhiệm vụ
-      </button>
-      <div id="sec1-after" style="display:none;">
-        <div class="notice" style="background:rgba(46,204,113,.07);border-color:rgba(46,204,113,.2);margin-bottom:10px;">
-          <span>✅</span>
-          <span>Đã mở link! Vui lòng xem xong rồi quay lại đây. Đang đếm ngược <b id="wait-num2">15</b> giây...</span>
-        </div>
-        <div class="cd-wrap">
-          <div class="ring-wrap">
-            <svg class="ring-svg" width="110" height="110" viewBox="0 0 110 110">
-              <circle class="ring-bg" cx="55" cy="55" r="45"/>
-              <circle class="ring-fg" id="ring" cx="55" cy="55" r="45"/>
-            </svg>
-            <div class="ring-center">
-              <div class="ring-num" id="cdn" style="color:var(--gold);">15</div>
-              <div class="ring-lbl">giây</div>
-            </div>
+      <div class="cd-wrap">
+        <div class="ring-wrap">
+          <svg class="ring-svg" width="110" height="110" viewBox="0 0 110 110">
+            <circle class="ring-bg" cx="55" cy="55" r="45"/>
+            <circle class="ring-fg" id="ring" cx="55" cy="55" r="45"/>
+          </svg>
+          <div class="ring-center">
+            <div class="ring-num" id="cdn" style="color:var(--gold);">30</div>
+            <div class="ring-lbl">giây</div>
           </div>
         </div>
-        <div class="prog-wrap">
-          <div class="prog-label"><span>Tiến độ xác minh</span><span id="prog-pct">0%</span></div>
-          <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
-        </div>
-        <button class="btn btn-gold" id="btn-continue" disabled onclick="doOpenAndContinue()">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
-          <span id="btn-txt">Đã xem xong, tiếp tục</span>
-        </button>
+        <div class="cd-msg">Đang xác minh bạn đã xem link...<br><b style="color:var(--text);">Không đóng trang này!</b></div>
       </div>
+      <div class="prog-wrap">
+        <div class="prog-label"><span>Tiến độ xác minh</span><span id="prog-pct">0%</span></div>
+        <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
+      </div>
+      <button class="btn btn-gold" id="btn-continue" disabled onclick="doConfirm()">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+        <span id="btn-txt">Đang đếm ngược...</span>
+      </button>
     </div>
 
     <!-- SEC 2: KIỂM TRA BẢO MẬT -->
@@ -348,58 +339,27 @@ var TASK_KEY = 'lb_verify_state';
 
 var _p={};
 var _cdT=null;
+var _cdDone=false; // đếm ngược xong chưa
 
 // ── State lưu qua F5 ──
-var _state={opened:false,startTime:0,leftTab:false,done:false,token:'',taskName:''};
-
+var _state={startTime:0,done:false,token:''};
 function saveState(){try{localStorage.setItem(TASK_KEY,JSON.stringify(_state));}catch(e){}}
-function loadState(){
-  try{var r=localStorage.getItem(TASK_KEY);if(r){var s=JSON.parse(r);if(s&&typeof s==='object')_state=s;}}catch(e){}
-}
+function loadState(){try{var r=localStorage.getItem(TASK_KEY);if(r){var s=JSON.parse(r);if(s)_state=s;}}catch(e){}}
 
 // ── ANTI-CHEAT: DevTools ──
 (function(){
-  var threshold=160;
+  var th=160;
   setInterval(function(){
-    if(window.outerWidth-window.innerWidth>threshold||window.outerHeight-window.innerHeight>threshold){
-      document.getElementById('block-overlay').classList.add('show');
-    }else{document.getElementById('block-overlay').classList.remove('show');}
+    (window.outerWidth-window.innerWidth>th||window.outerHeight-window.innerHeight>th)?
+      g('block-overlay').classList.add('show'):g('block-overlay').classList.remove('show');
   },800);
   document.addEventListener('contextmenu',function(e){e.preventDefault();});
   document.addEventListener('keydown',function(e){
     if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&['I','J','C'].includes(e.key))||(e.ctrlKey&&e.key==='U')){
-      e.preventDefault();document.getElementById('block-overlay').classList.add('show');
+      e.preventDefault();g('block-overlay').classList.add('show');
     }
   });
 })();
-
-// ── ANTI-CHEAT: Chặn nhiều tab ──
-var _tabKey='lb_verify_active';
-var _myTabId=Date.now().toString(36)+Math.random().toString(36).slice(2);
-localStorage.setItem(_tabKey,_myTabId);
-window.addEventListener('storage',function(e){
-  if(e.key===_tabKey&&e.newValue!==_myTabId){document.getElementById('block-overlay').classList.add('show');}
-});
-
-// ── Track rời tab (mobile + desktop) ──
-// visibilitychange cho desktop
-document.addEventListener('visibilitychange',function(){
-  if(document.hidden&&_state.opened&&!_state.done){
-    _state.leftTab=true;saveState();
-  }
-});
-// pagehide cho mobile (nút Back)
-window.addEventListener('pagehide',function(){
-  if(_state.opened&&!_state.done){
-    _state.leftTab=true;saveState();
-  }
-});
-// blur cho desktop (chuyển tab)
-window.addEventListener('blur',function(){
-  if(_state.opened&&!_state.done){
-    _state.leftTab=true;saveState();
-  }
-});
 
 // ── Khởi động ──
 window.onload=function(){
@@ -410,16 +370,20 @@ window.onload=function(){
     token :up.get('token')||'',
     name  :up.get('name')||'Nhiệm vụ LinkBeta',
     reward:parseInt(up.get('reward'))||0,
-    wait  :parseInt(up.get('wait'))||15,
-    icon  :up.get('icon')||'🌐'
+    wait  :parseInt(up.get('wait'))||30,
+    icon  :up.get('icon')||'🌐',
+    ret   :up.get('return')||HOME+'?done=1'
   };
-  if(!_p.url||!_p.token){goSec('sec-err');return;}
 
-  // Token khác → reset state
-  if(_state.token&&_state.token!==_p.token){
-    _state={opened:false,startTime:0,leftTab:false,done:false,token:'',taskName:''};saveState();
+  if(!_p.token){goSec('sec-err');return;}
+
+  // Token mới → reset state
+  if(_state.token!==_p.token){
+    _state={startTime:Date.now(),done:false,token:_p.token};
+    saveState();
   }
 
+  // Fill UI
   g('t-icon').textContent  =_p.icon;
   g('t-name').textContent  =_p.name;
   g('t-reward').textContent='+'+_p.reward.toLocaleString('vi-VN')+'đ phần thưởng';
@@ -428,117 +392,87 @@ window.onload=function(){
   // Đã done → redirect luôn
   if(_state.done&&_state.token===_p.token){goSec('sec4');startRedirect();return;}
 
-  // Nếu đang trong quá trình làm (opened) → pageshow sẽ xử lý
-  // Chỉ hiện sec1 khi chưa bắt đầu
-  if(!_state.opened||_state.token!==_p.token){
-    goSec('sec1');
-  }
+  // Bắt đầu đếm ngược ngay (link đã mở ở tab mới rồi)
+  goSec('sec1');
+  startCountdown();
 };
 
-// ── Đếm ngược resume-proof ──
+// ── Đếm ngược ──
 function startCountdown(){
-  var total=_p.wait||15;
+  var total=_p.wait||30;
   var circ=283;
   var ring=g('ring');
   if(ring)ring.style.strokeDashoffset=circ;
   clearInterval(_cdT);
+
   _cdT=setInterval(function(){
     var elapsed=Math.floor((Date.now()-_state.startTime)/1000);
     var secs=Math.max(0,total-elapsed);
     var pct=Math.min(1,elapsed/total);
+
     if(ring){ring.style.strokeDashoffset=circ-(circ*pct);if(secs<=5)ring.style.stroke='#2ECC71';}
     var cdEl=g('cdn');if(cdEl){cdEl.textContent=secs;if(secs<=5)cdEl.style.color='#2ECC71';}
     var pf=g('prog-fill');if(pf)pf.style.width=Math.round(pct*100)+'%';
     var pp=g('prog-pct');if(pp)pp.textContent=Math.round(pct*100)+'%';
-    if(secs<=0){
+
+    if(secs<=0&&!_cdDone){
+      _cdDone=true;
       clearInterval(_cdT);
       var btn=g('btn-continue');
-      if(btn){btn.disabled=false;btn.innerHTML='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> ✅ Đã xem xong, nhận thưởng!';}
+      if(btn){
+        btn.disabled=false;
+        btn.innerHTML='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> ✅ Xác nhận đã xem - Nhận thưởng!';
+        btn.style.background='linear-gradient(135deg,#2ECC71,#27AE60)';
+        btn.style.color='#fff';
+      }
+      var cdEl2=g('cdn');if(cdEl2)cdEl2.textContent='✓';
     }
   },500);
 }
 
-// ── Bước 1: Mở link ──
-function doOpenLink(){
-  var btn=g('btn-open');
-  if(btn){btn.disabled=true;btn.innerHTML='⏳ Đang chuyển trang...';}
-
-  // Lưu state TRƯỚC khi rời trang
-  _state={
-    opened   :true,
-    startTime:Date.now(),
-    leftTab  :false,
-    done     :false,
-    token    :_p.token,
-    taskName :_p.name
-  };
-  saveState();
-
-  // Chuyển hẳn sang link nhiệm vụ (không open tab mới)
-  // → Mobile: user bấm Back = quay về verify → pageshow fire → leftTab=true
-  // → Link4m: sau khi vượt → redirect về verify?done=1 → leftTab=true
-  setTimeout(function(){
-    window.location.href=_p.url;
-  },300);
-}
-
-// ── Khi trang được restore (Back button / bfcache) ──
-window.addEventListener('pageshow',function(e){
-  loadState();
-  if(_state.opened&&_state.token===_p.token&&!_state.done){
-    _state.leftTab=true;
-    saveState();
-    // Hiện UI đếm ngược
-    var btn=g('btn-open');
-    if(btn){btn.disabled=true;btn.innerHTML='✅ Đã xem link...';}
-    var after=g('sec1-after');
-    if(after)after.style.display='block';
-    var elapsed=Math.floor((Date.now()-_state.startTime)/1000);
-    var remain=Math.max(0,(_p.wait||15)-elapsed);
-    var cdn=g('cdn');if(cdn)cdn.textContent=remain;
-    startCountdown();
-  }
-});
-
-// ── Bước 2: Bấm "Đã xem xong" ──
-function doOpenAndContinue(){
-  if(!_state.opened){toast2('⚠️ Bạn chưa mở link nhiệm vụ!');return;}
-  if(!_state.leftTab){toast2('❌ Bạn chưa thực sự rời trang xem link!');return;}
+// ── Xác nhận nhận thưởng ──
+function doConfirm(){
+  // Check đủ thời gian
   var elapsed=(Date.now()-_state.startTime)/1000;
-  if(elapsed<(_p.wait||15)){
-    var remain=Math.ceil((_p.wait||15)-elapsed);
-    toast2('⏳ Cần xem thêm '+remain+' giây nữa!');return;
+  if(elapsed<(_p.wait||30)){
+    toast2('⏳ Chưa đủ thời gian! Còn '+Math.ceil((_p.wait||30)-elapsed)+' giây.');return;
   }
-  var btn=g('btn-continue');if(btn){btn.disabled=true;btn.innerHTML='Đang xác minh...';}
-  goSec('sec2');startVerify();
+  var btn=g('btn-continue');
+  if(btn){btn.disabled=true;btn.innerHTML='Đang xác minh...';}
+  goSec('sec2');
+  startVerify();
 }
+
+// Alias cho HTML cũ
+function doOpenAndContinue(){doConfirm();}
 
 // ── Kiểm tra bảo mật ──
 function startVerify(){
   ['c1','c2','c3','c4'].forEach(function(id){var el=g(id);if(el)el.innerHTML='<div class="c-spin"></div>';});
   var allPass=true;
-  setTimeout(function(){(_state.opened&&_state.leftTab)?cok('c1'):(cfail('c1'),allPass=false);},700);
-  setTimeout(function(){(Date.now()-_state.startTime>=(_p.wait||15)*1000)?cok('c2'):(cfail('c2'),allPass=false);},1500);
+  setTimeout(function(){cok('c1');},700); // link đã mở ở trang chính
+  setTimeout(function(){
+    var elapsed=Date.now()-_state.startTime;
+    elapsed>=(_p.wait||30)*1000?cok('c2'):(cfail('c2'),allPass=false);
+  },1500);
   setTimeout(function(){cok('c3');},2300);
   setTimeout(function(){
-    (_p.token&&_p.token.length>4)?cok('c4'):(cfail('c4'),allPass=false);
+    _p.token&&_p.token.length>4?cok('c4'):(cfail('c4'),allPass=false);
     setTimeout(function(){
       if(allPass){goSec('sec3');}
       else{
-        showAlert('❌ Xác minh thất bại! Vui lòng thử lại.');
-        setTimeout(function(){
-          _state={opened:false,startTime:0,leftTab:false,done:false,token:'',taskName:''};
-          saveState();location.reload();
-        },2500);
+        showAlert('❌ Xác minh thất bại!');
+        setTimeout(function(){location.reload();},2500);
       }
     },700);
   },3200);
 }
 
-// ── Nhận thưởng ──
+// ── Nhận thưởng → redirect về trang chính ──
 function doClaim(){
   if(_state.done){toast2('Bạn đã nhận rồi!');return;}
-  var btn=g('btn-claim');if(btn){btn.disabled=true;btn.innerHTML='Đang xử lý...';}
+  var btn=g('btn-claim');
+  if(btn){btn.disabled=true;btn.innerHTML='Đang xử lý...';}
   _state.done=true;saveState();
   goSec('sec4');startRedirect();
 }
@@ -554,9 +488,12 @@ function startRedirect(){
 }
 
 function goHome(){
-  localStorage.removeItem(_tabKey);
   localStorage.removeItem(TASK_KEY);
-  location.href=HOME+'?done=1&token='+encodeURIComponent(_p.token)+'&task='+encodeURIComponent(_p.name)+'&reward='+_p.reward;
+  // Redirect về trang chính kèm token để cộng tiền
+  var url=HOME+'?done=1&token='+encodeURIComponent(_p.token)
+    +'&task='+encodeURIComponent(_p.name)
+    +'&reward='+_p.reward;
+  location.href=url;
 }
 
 function g(id){return document.getElementById(id);}
