@@ -381,9 +381,22 @@ window.addEventListener('storage',function(e){
   if(e.key===_tabKey&&e.newValue!==_myTabId){document.getElementById('block-overlay').classList.add('show');}
 });
 
-// ── Track rời tab (visibilitychange) ──
+// ── Track rời tab (mobile + desktop) ──
+// visibilitychange cho desktop
 document.addEventListener('visibilitychange',function(){
   if(document.hidden&&_state.opened&&!_state.done){
+    _state.leftTab=true;saveState();
+  }
+});
+// pagehide cho mobile (nút Back)
+window.addEventListener('pagehide',function(){
+  if(_state.opened&&!_state.done){
+    _state.leftTab=true;saveState();
+  }
+});
+// blur cho desktop (chuyển tab)
+window.addEventListener('blur',function(){
+  if(_state.opened&&!_state.done){
     _state.leftTab=true;saveState();
   }
 });
@@ -415,17 +428,11 @@ window.onload=function(){
   // Đã done → redirect luôn
   if(_state.done&&_state.token===_p.token){goSec('sec4');startRedirect();return;}
 
-  // F5 resume
-  if(_state.opened&&_state.token===_p.token){
-    var btn=g('btn-open');if(btn){btn.disabled=true;btn.innerHTML='✅ Đã mở link...';}
-    var after=g('sec1-after');if(after)after.style.display='block';
-    var elapsed=Math.floor((Date.now()-_state.startTime)/1000);
-    var remain=Math.max(0,_p.wait-elapsed);
-    var cdn=g('cdn');if(cdn)cdn.textContent=remain;
-    startCountdown();return;
+  // Nếu đang trong quá trình làm (opened) → pageshow sẽ xử lý
+  // Chỉ hiện sec1 khi chưa bắt đầu
+  if(!_state.opened||_state.token!==_p.token){
+    goSec('sec1');
   }
-
-  goSec('sec1');
 };
 
 // ── Đếm ngược resume-proof ──
@@ -454,15 +461,44 @@ function startCountdown(){
 // ── Bước 1: Mở link ──
 function doOpenLink(){
   var btn=g('btn-open');
-  if(btn){btn.disabled=true;btn.innerHTML='✅ Đang mở link...';}
-  _state={opened:true,startTime:Date.now(),leftTab:false,done:false,token:_p.token,taskName:_p.name};
+  if(btn){btn.disabled=true;btn.innerHTML='⏳ Đang chuyển trang...';}
+
+  // Lưu state TRƯỚC khi rời trang
+  _state={
+    opened   :true,
+    startTime:Date.now(),
+    leftTab  :false,
+    done     :false,
+    token    :_p.token,
+    taskName :_p.name
+  };
   saveState();
-  var newTab=window.open(_p.url,'_blank','noopener,noreferrer');
-  if(!newTab)window.open(_p.url,'_blank');
-  var after=g('sec1-after');if(after)after.style.display='block';
-  var cdn=g('cdn');if(cdn)cdn.textContent=_p.wait;
-  startCountdown();
+
+  // Chuyển hẳn sang link nhiệm vụ (không open tab mới)
+  // → Mobile: user bấm Back = quay về verify → pageshow fire → leftTab=true
+  // → Link4m: sau khi vượt → redirect về verify?done=1 → leftTab=true
+  setTimeout(function(){
+    window.location.href=_p.url;
+  },300);
 }
+
+// ── Khi trang được restore (Back button / bfcache) ──
+window.addEventListener('pageshow',function(e){
+  loadState();
+  if(_state.opened&&_state.token===_p.token&&!_state.done){
+    _state.leftTab=true;
+    saveState();
+    // Hiện UI đếm ngược
+    var btn=g('btn-open');
+    if(btn){btn.disabled=true;btn.innerHTML='✅ Đã xem link...';}
+    var after=g('sec1-after');
+    if(after)after.style.display='block';
+    var elapsed=Math.floor((Date.now()-_state.startTime)/1000);
+    var remain=Math.max(0,(_p.wait||15)-elapsed);
+    var cdn=g('cdn');if(cdn)cdn.textContent=remain;
+    startCountdown();
+  }
+});
 
 // ── Bước 2: Bấm "Đã xem xong" ──
 function doOpenAndContinue(){
