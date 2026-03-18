@@ -342,250 +342,200 @@ body::after{
 
 <script>
 // =====================================================
-// CẤU HÌNH — Chỉnh sửa 1 dòng này thôi!
+var HOME     = 'https://linkbeta-vn.vercel.app/';
+var TASK_KEY = 'lb_verify_state';
 // =====================================================
-var HOME = 'https://linkbeta-vn.vercel.app/';
-// =====================================================
 
-var _p      = {};   // URL params
-var _opened = false;
-var _startT = 0;
-var _cdT    = null;
-var _claimed= false;
-var _leftTab= false; // đã rời tab sang link chưa
-var _leftCount=0;    // số lần rời tab
+var _p={};
+var _cdT=null;
 
-// Theo dõi user có thực sự rời tab xem link không
-document.addEventListener('visibilitychange',function(){
-  if(document.hidden&&_opened){
-    _leftTab=true;
-    _leftCount++;
-  }
-});
+// ── State lưu qua F5 ──
+var _state={opened:false,startTime:0,leftTab:false,done:false,token:'',taskName:''};
 
-// ── ANTI-CHEAT: Phát hiện DevTools ──
+function saveState(){try{localStorage.setItem(TASK_KEY,JSON.stringify(_state));}catch(e){}}
+function loadState(){
+  try{var r=localStorage.getItem(TASK_KEY);if(r){var s=JSON.parse(r);if(s&&typeof s==='object')_state=s;}}catch(e){}
+}
+
+// ── ANTI-CHEAT: DevTools ──
 (function(){
   var threshold=160;
   setInterval(function(){
     if(window.outerWidth-window.innerWidth>threshold||window.outerHeight-window.innerHeight>threshold){
       document.getElementById('block-overlay').classList.add('show');
-    } else {
-      document.getElementById('block-overlay').classList.remove('show');
-    }
+    }else{document.getElementById('block-overlay').classList.remove('show');}
   },800);
-  // Chặn chuột phải
   document.addEventListener('contextmenu',function(e){e.preventDefault();});
-  // Chặn F12, Ctrl+Shift+I/J/C, Ctrl+U
   document.addEventListener('keydown',function(e){
     if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&['I','J','C'].includes(e.key))||(e.ctrlKey&&e.key==='U')){
-      e.preventDefault();
-      document.getElementById('block-overlay').classList.add('show');
+      e.preventDefault();document.getElementById('block-overlay').classList.add('show');
     }
   });
 })();
 
-// ── ANTI-CHEAT: Chặn mở nhiều tab ──
+// ── ANTI-CHEAT: Chặn nhiều tab ──
 var _tabKey='lb_verify_active';
 var _myTabId=Date.now().toString(36)+Math.random().toString(36).slice(2);
 localStorage.setItem(_tabKey,_myTabId);
 window.addEventListener('storage',function(e){
-  if(e.key===_tabKey&&e.newValue!==_myTabId){
-    // Tab khác đang mở → block
-    document.getElementById('block-overlay').classList.add('show');
+  if(e.key===_tabKey&&e.newValue!==_myTabId){document.getElementById('block-overlay').classList.add('show');}
+});
+
+// ── Track rời tab (visibilitychange) ──
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden&&_state.opened&&!_state.done){
+    _state.leftTab=true;saveState();
   }
 });
 
 // ── Khởi động ──
 window.onload=function(){
-  var search=location.search;
-  var up=new URLSearchParams(search);
+  loadState();
+  var up=new URLSearchParams(location.search);
   _p={
-    url   : up.get('url')    ||'',
-    token : up.get('token')  ||'',
-    name  : up.get('name')   ||'Nhiệm vụ LinkBeta',
-    reward: parseInt(up.get('reward'))||0,
-    wait  : parseInt(up.get('wait'))  ||15,
-    icon  : up.get('icon')   ||'🌐'
+    url   :up.get('url')||'',
+    token :up.get('token')||'',
+    name  :up.get('name')||'Nhiệm vụ LinkBeta',
+    reward:parseInt(up.get('reward'))||0,
+    wait  :parseInt(up.get('wait'))||15,
+    icon  :up.get('icon')||'🌐'
   };
+  if(!_p.url||!_p.token){goSec('sec-err');return;}
 
-  // Validate params
-  if(!_p.url||!_p.token){
-    goSec('sec-err');return;
+  // Token khác → reset state
+  if(_state.token&&_state.token!==_p.token){
+    _state={opened:false,startTime:0,leftTab:false,done:false,token:'',taskName:''};saveState();
   }
 
-  // Fill UI
   g('t-icon').textContent  =_p.icon;
   g('t-name').textContent  =_p.name;
   g('t-reward').textContent='+'+_p.reward.toLocaleString('vi-VN')+'đ phần thưởng';
   g('r-amt').textContent   ='+'+_p.reward.toLocaleString('vi-VN')+'đ';
-  g('wait-num').textContent=_p.wait;
-  g('cdn').textContent     =_p.wait;
-  g('btn-txt').textContent ='Mở link nhiệm vụ →';
 
-  // KHÔNG tự mở popup (mobile block) — để user bấm nút mở
+  // Đã done → redirect luôn
+  if(_state.done&&_state.token===_p.token){goSec('sec4');startRedirect();return;}
+
+  // F5 resume
+  if(_state.opened&&_state.token===_p.token){
+    var btn=g('btn-open');if(btn){btn.disabled=true;btn.innerHTML='✅ Đã mở link...';}
+    var after=g('sec1-after');if(after)after.style.display='block';
+    var elapsed=Math.floor((Date.now()-_state.startTime)/1000);
+    var remain=Math.max(0,_p.wait-elapsed);
+    var cdn=g('cdn');if(cdn)cdn.textContent=remain;
+    startCountdown();return;
+  }
+
+  goSec('sec1');
 };
 
-// ── Đếm ngược ──
+// ── Đếm ngược resume-proof ──
 function startCountdown(){
   var total=_p.wait||15;
-  var secs=total;
   var circ=283;
   var ring=g('ring');
-  if(!ring)return;
-  ring.style.strokeDashoffset=circ;
-  var cdEl=g('cdn');
-  var progFill=g('prog-fill');
-  var progPct=g('prog-pct');
-
+  if(ring)ring.style.strokeDashoffset=circ;
   clearInterval(_cdT);
   _cdT=setInterval(function(){
-    secs--;
-    if(secs<0)secs=0;
-    var pct=(total-secs)/total;
-    ring.style.strokeDashoffset=circ-(circ*pct);
-    if(secs<=5){ring.style.stroke='#2ECC71';if(cdEl)cdEl.style.color='#2ECC71';}
-    if(cdEl)cdEl.textContent=secs;
-    var p=Math.round(pct*100);
-    if(progFill)progFill.style.width=p+'%';
-    if(progPct)progPct.textContent=p+'%';
-
+    var elapsed=Math.floor((Date.now()-_state.startTime)/1000);
+    var secs=Math.max(0,total-elapsed);
+    var pct=Math.min(1,elapsed/total);
+    if(ring){ring.style.strokeDashoffset=circ-(circ*pct);if(secs<=5)ring.style.stroke='#2ECC71';}
+    var cdEl=g('cdn');if(cdEl){cdEl.textContent=secs;if(secs<=5)cdEl.style.color='#2ECC71';}
+    var pf=g('prog-fill');if(pf)pf.style.width=Math.round(pct*100)+'%';
+    var pp=g('prog-pct');if(pp)pp.textContent=Math.round(pct*100)+'%';
     if(secs<=0){
       clearInterval(_cdT);
       var btn=g('btn-continue');
-      if(btn){
-        btn.disabled=false;
-        btn.innerHTML='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> ✅ Đã xem xong, nhận thưởng!';
-      }
+      if(btn){btn.disabled=false;btn.innerHTML='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> ✅ Đã xem xong, nhận thưởng!';}
     }
-  },1000);
+  },500);
 }
 
-// ── Bước 1: User bấm mở link ──
+// ── Bước 1: Mở link ──
 function doOpenLink(){
   var btn=g('btn-open');
-  if(btn){btn.disabled=true;btn.innerHTML='✅ Đã mở link...';}
-
-  // Mở link trong tab mới — DO USER CLICK nên mobile không block
+  if(btn){btn.disabled=true;btn.innerHTML='✅ Đang mở link...';}
+  _state={opened:true,startTime:Date.now(),leftTab:false,done:false,token:_p.token,taskName:_p.name};
+  saveState();
   var newTab=window.open(_p.url,'_blank','noopener,noreferrer');
-  if(!newTab){
-    // Fallback nếu bị block: mở trực tiếp
-    window.location.href=_p.url;
-  }
-  _opened=true;
-  _startT=Date.now();
-
-  // Hiện phần đếm ngược
-  var after=g('sec1-after');
-  if(after)after.style.display='block';
-  var wn=g('wait-num2');
-  if(wn)wn.textContent=_p.wait;
-  var cdn=g('cdn');
-  if(cdn)cdn.textContent=_p.wait;
-
+  if(!newTab)window.open(_p.url,'_blank');
+  var after=g('sec1-after');if(after)after.style.display='block';
+  var cdn=g('cdn');if(cdn)cdn.textContent=_p.wait;
   startCountdown();
 }
 
-// ── Bước 2: User bấm "Đã xem xong" ──
+// ── Bước 2: Bấm "Đã xem xong" ──
 function doOpenAndContinue(){
-  if(!_opened){
-    alert('⚠️ Bạn chưa mở link nhiệm vụ!');return;
+  if(!_state.opened){toast2('⚠️ Bạn chưa mở link nhiệm vụ!');return;}
+  if(!_state.leftTab){toast2('❌ Bạn chưa thực sự rời trang xem link!');return;}
+  var elapsed=(Date.now()-_state.startTime)/1000;
+  if(elapsed<(_p.wait||15)){
+    var remain=Math.ceil((_p.wait||15)-elapsed);
+    toast2('⏳ Cần xem thêm '+remain+' giây nữa!');return;
   }
-  // Check đã rời tab chưa
-  if(!_leftTab){
-    alert('❌ Bạn chưa thực sự xem link!\nVui lòng mở link và xem xong rồi quay lại.');return;
-  }
-  // Check đủ thời gian
-  var elapsed=(Date.now()-_startT)/1000;
-  var required=_p.wait||15;
-  if(elapsed<required){
-    var remain=Math.ceil(required-elapsed);
-    alert('⏳ Bạn xem quá nhanh!\nCần xem thêm '+remain+' giây nữa.');return;
-  }
-  var btn=g('btn-continue');
-  if(btn){btn.disabled=true;btn.innerHTML='Đang xác minh...';}
-  goSec('sec2');
-  startVerify();
+  var btn=g('btn-continue');if(btn){btn.disabled=true;btn.innerHTML='Đang xác minh...';}
+  goSec('sec2');startVerify();
 }
 
 // ── Kiểm tra bảo mật ──
 function startVerify(){
-  // Reset
-  ['c1','c2','c3','c4'].forEach(function(id){
-    var el=g(id);if(el)el.innerHTML='<div class="c-spin"></div>';
-  });
+  ['c1','c2','c3','c4'].forEach(function(id){var el=g(id);if(el)el.innerHTML='<div class="c-spin"></div>';});
   var allPass=true;
-
-  // Check 1: đã mở link VÀ đã rời tab
-  setTimeout(function(){
-    if(_opened&&_leftTab){cok('c1');}else{cfail('c1');allPass=false;}
-  },700);
-
-  // Check 2: đủ thời gian
-  setTimeout(function(){
-    var elapsed=Date.now()-_startT;
-    if(elapsed>=(_p.wait||15)*1000){cok('c2');}else{cfail('c2');allPass=false;}
-  },1500);
-
-  // Check 3: VPN check (luôn pass — chỉ hiển thị)
+  setTimeout(function(){(_state.opened&&_state.leftTab)?cok('c1'):(cfail('c1'),allPass=false);},700);
+  setTimeout(function(){(Date.now()-_state.startTime>=(_p.wait||15)*1000)?cok('c2'):(cfail('c2'),allPass=false);},1500);
   setTimeout(function(){cok('c3');},2300);
-
-  // Check 4: Token hợp lệ (có token trong URL là hợp lệ)
   setTimeout(function(){
-    if(_p.token&&_p.token.length>4){cok('c4');}else{cfail('c4');allPass=false;}
+    (_p.token&&_p.token.length>4)?cok('c4'):(cfail('c4'),allPass=false);
     setTimeout(function(){
       if(allPass){goSec('sec3');}
-      else{showAlert('Xác minh thất bại! Vui lòng thử lại.');setTimeout(function(){location.reload();},2500);}
+      else{
+        showAlert('❌ Xác minh thất bại! Vui lòng thử lại.');
+        setTimeout(function(){
+          _state={opened:false,startTime:0,leftTab:false,done:false,token:'',taskName:''};
+          saveState();location.reload();
+        },2500);
+      }
     },700);
   },3200);
 }
 
-// ── Nhận thưởng + redirect ──
+// ── Nhận thưởng ──
 function doClaim(){
-  if(_claimed)return;
-  _claimed=true;
-  var btn=g('btn-claim');
-  btn.disabled=true;
-  btn.innerHTML='Đang xử lý...';
-  goSec('sec4');
-  // Bắt đầu redirect về web chính kèm token
-  startRedirect();
+  if(_state.done){toast2('Bạn đã nhận rồi!');return;}
+  var btn=g('btn-claim');if(btn){btn.disabled=true;btn.innerHTML='Đang xử lý...';}
+  _state.done=true;saveState();
+  goSec('sec4');startRedirect();
 }
 
 function startRedirect(){
-  var sec=3;
-  var fill=g('rfill');
-  var secEl=g('rsec');
+  var sec=3;var fill=g('rfill');var secEl=g('rsec');
   var t=setInterval(function(){
     sec--;
     if(secEl)secEl.textContent=sec<0?0:sec;
-    var pct=((3-sec)/3)*100;
-    if(fill)fill.style.width=pct+'%';
+    if(fill)fill.style.width=(((3-sec)/3)*100)+'%';
     if(sec<=0){clearInterval(t);goHome();}
   },1000);
 }
 
 function goHome(){
-  // Redirect về LinkBeta kèm done=1 và token để xác thực
-  var returnUrl=HOME+'?done=1&token='+encodeURIComponent(_p.token)
-    +'&task='+encodeURIComponent(_p.name)
-    +'&reward='+_p.reward;
-  localStorage.removeItem(_tabKey); // giải phóng tab lock
-  location.href=returnUrl;
+  localStorage.removeItem(_tabKey);
+  localStorage.removeItem(TASK_KEY);
+  location.href=HOME+'?done=1&token='+encodeURIComponent(_p.token)+'&task='+encodeURIComponent(_p.name)+'&reward='+_p.reward;
 }
 
-// ── Helpers ──
 function g(id){return document.getElementById(id);}
 function goSec(id){
-  ['sec1','sec2','sec3','sec4','sec-err'].forEach(function(s){
-    var el=g(s);if(el)el.classList.remove('on');
-  });
+  ['sec1','sec2','sec3','sec4','sec-err'].forEach(function(s){var el=g(s);if(el)el.classList.remove('on');});
   var t=g(id);if(t)t.classList.add('on');
 }
 function cok(id){var el=g(id);if(el)el.innerHTML='<span class="c-ok">✓</span>';}
 function cfail(id){var el=g(id);if(el)el.innerHTML='<span class="c-fail">✗</span>';}
-function showAlert(msg){
-  var el=g('a3');if(!el)return;
-  el.textContent=msg;el.classList.add('on');
+function showAlert(msg){var el=g('a3');if(!el)return;el.textContent=msg;el.classList.add('on');}
+function toast2(msg){
+  var t=document.createElement('div');
+  t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid rgba(245,166,35,.3);border-radius:10px;padding:12px 20px;font-size:13px;font-weight:700;color:#f0f0f0;z-index:9998;text-align:center;max-width:280px;';
+  t.textContent=msg;document.body.appendChild(t);
+  setTimeout(function(){t.remove();},3000);
 }
 </script>
 </body>
