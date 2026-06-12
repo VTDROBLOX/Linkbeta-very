@@ -1,0 +1,32 @@
+print("")
+local req = (syn and syn.request) or (http and http.request) or http_request or request
+if not req then return end
+
+pcall(function()
+    req({
+        Url = "https://api-server-clig.onrender.com/execute",
+        Method = "POST"
+    })
+end)
+
+spawn(function()
+    while true do
+        local lighting = game:GetService("Lighting")
+        local sky = lighting:FindFirstChildOfClass("Sky") or lighting:FindFirstChild("Sky")
+        
+        if sky and (string.find(string.lower(sky.MoonTextureId), "9709149431") or string.find(string.lower(sky.MoonTextureId), "full")) then
+            local myData = { jobId = tostring(game.JobId), players = #game:GetService("Players"):GetPlayers() }
+            pcall(function()
+                req({
+                    Url = "https://api-server-clig.onrender.com/update-moon",
+                    Method = "POST",
+                    Headers = { ["Content-Type"] = "application/json" },
+                    Body = game:GetService("HttpService"):JSONEncode(myData)
+                })
+            end)
+        end
+        task.wait(60)
+    end
+end)
+
+
