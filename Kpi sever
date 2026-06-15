@@ -1,42 +1,43 @@
 print("")
-local req = (syn and syn.request) or (http and http.request) or http_request or request
-if not req then return end
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
 
-local Http = game:GetService("HttpService")
+local request_fn = (syn and syn.request) or (http and http.request) or http_request or request
+if not request_fn then return end
 
--- Gọi cổng tăng lượt chạy tổng
-pcall(function()
-    req({ Url = "https://api-server-clig.onrender.com/execute", Method = "POST" })
-end)
-
+-- Cấu hình API của Tùng
+local API_URL = "https://api-server-clig.onrender.com"
 local active = {}
 
--- LOGIC MỚI: Check Sea dựa trên Badge/Tên địa danh thực tế thay vì check ID số dễ lỗi
-local function getRealSea()
-    local titleName = game:GetService("Players").LocalPlayer defense or ""
-    -- Dựa vào việc tìm kiếm các hòn đảo đặc trưng trong Workspace để xác định Sea
-    if workspace:FindFirstChild("Ghost Ship") or workspace:FindFirstChild("Ice Castle") then
-        return 2
-    elseif workspace:FindFirstChild("Sea Beast Spawner") or workspace:FindFirstChild("Turtle") or workspace:FindFirstChild("Hydra Island") then
-        return 3
-    end
-    
-    -- Cách dự phòng 2: Quét lại theo ID mặc định nếu không tìm thấy object
+-- 1. TĂNG LƯỢT EXECUTE CHUẨN
+pcall(function()
+    request_fn({ Url = API_URL .. "/execute", Method = "POST" })
+end)
+
+-- 2. HÀM CHECK SEA CẬP NHẬT MỌI PHÒNG CON (Fix kẹt số 0)
+local function getSea()
     local id = game.PlaceId
-    if id == 4442232693 or id == 4442272183 then return 2 end
-    if id == 4442247956 or id == 7449423635 or tostring(game.JobId) ~= "" then return 3 end -- Ép về Sea 3 nếu là phòng con
+    -- ID gốc và ID cụm phòng phụ Sea 1
+    if id == 2753915549 or id == 85211729168715 then return 1 end
+    -- ID gốc và ID cụm phòng phụ Sea 2
+    if id == 4442232693 or id == 4442272183 or id == 79091703265657 then return 2 end
+    -- ID gốc và ID cụm phòng phụ Sea 3 (Bypass hoàn toàn cụm server v31 mới của Tùng)
+    if id == 4442247956 or id == 7449423635 or id == 100117331123089 or tostring(game.JobId) ~= "" then return 3 end
     return 3
 end
 
+-- 3. HÀM GỬI GAME DATA ĐA NHIỆM VỀ CỔNG MỚI
 local function sendGameData(eventType)
     pcall(function()
-        req({
-            Url = "https://api-server-clig.onrender.com/update-game",
+        request_fn({
+            Url = API_URL .. "/update-game",
             Method = "POST",
             Headers = { ["Content-Type"] = "application/json" },
-            Body = Http:JSONEncode({
+            Body = HttpService:JSONEncode({
                 jobId = tostring(game.JobId),
-                players = #game:GetService("Players"):GetPlayers(),
+                players = #Players:GetPlayers(),
                 placeId = game.PlaceId,
                 type = eventType
             })
@@ -44,6 +45,7 @@ local function sendGameData(eventType)
     end)
 end
 
+-- 4. HÀM CHECK ĐIỀU KIỆN CHỐNG SPAM RENDER
 local function check(name, eventType, cond)
     local ok = false
     pcall(function() ok = cond() end)
@@ -51,64 +53,69 @@ local function check(name, eventType, cond)
         if not active[name] then
             active[name] = true
             sendGameData(eventType)
+            print("[SUCCESS] Đã gửi sự kiện lên Web: " .. eventType)
         end
     else
         active[name] = nil
     end
 end
 
-local function findEnemy(name)
-    local enemies = workspace:FindFirstChild("Enemies")
+-- 5. HÀM ĐỊNH VỊ BOSS CHUẨN KHÔNG SÓT MỘT CON (Bê nguyên từ Hub lớn)
+local function enemy(name)
     return function()
-        return game:GetService("ReplicatedStorage"):FindFirstChild(name) 
-            or (enemies and enemies:FindFirstChild(name))
+        local Enemies = workspace:FindFirstChild("Enemies")
+        return RS:FindFirstChild(name)
+            or (Enemies and Enemies:FindFirstChild(name))
     end
 end
 
--- VÒNG LẶP QUÉT HOÀN CHỈNH (MỖI 7 GIÂY)
-spawn(function()
-    while true do
-        local sea = getRealSea()
-        local lighting = game:GetService("Lighting")
-        local sky = lighting:FindFirstChildOfClass("Sky") or lighting:FindFirstChild("Sky")
-        
-        -- A. QUÉT TRĂNG TRÒN
-        if sky and (string.find(string.lower(sky.MoonTextureId), "9709149431") or string.find(string.lower(sky.MoonTextureId), "full")) then
-            pcall(function()
-                req({
-                    Url = "https://api-server-clig.onrender.com/update-moon",
-                    Method = "POST",
-                    Headers = { ["Content-Type"] = "application/json" },
-                    Body = Http:JSONEncode({
-                        jobId = tostring(game.JobId), 
-                        players = #game:GetService("Players"):GetPlayers() 
+-- 6. LUỒNG CHẠY NGẦM QUÉT TỔNG HỢP MỖI 5 GIÂY (Siêu tốc như Hub lớn)
+task.spawn(function()
+    while task.wait(5) do
+        local sea = getSea()
+        local sky = Lighting:FindFirstChildOfClass("Sky") or Lighting:FindFirstChild("Sky")
+
+        -- ====== A. QUÉT CHU KỲ TRĂNG (Gửi về cổng cũ /update-moon) ======
+        if sky then
+            local moon = sky.MoonTextureId
+            if moon == "http://www.roblox.com/asset/?id=9709149431" or string.find(string.lower(moon), "full") then
+                pcall(function()
+                    request_fn({
+                        Url = API_URL .. "/update-moon",
+                        Method = "POST",
+                        Headers = { ["Content-Type"] = "application/json" },
+                        Body = HttpService:JSONEncode({
+                            jobId = tostring(game.JobId), 
+                            players = #Players:GetPlayers() 
+                        })
                     })
-                })
-            end)
+                end)
+            end
         end
 
-        -- B. QUÉT BOSS SEA 2
+        -- ====== B. QUÉT SỰ KIỆN TẠI SEA 2 ======
         if sea == 2 then
-            check("captain", "CursedCaptain", findEnemy("Cursed Captain"))
+            check("captain", "CursedCaptain", enemy("Cursed Captain"))
         end
 
-        -- C. QUÉT BOSS & ĐẢO SEA 3
+        -- ====== C. QUÉT SỰ KIỆN TẠI SEA 3 (Tên chuẩn chữ hoa của game) ======
         if sea == 3 then
-            check("rip", "RipIndra", findEnemy("Rip Indra"))
-            check("doughv2", "KatakuriV2", findEnemy("Dough King"))
-            check("reaper", "SoulReaper", findEnemy("Soul Reaper"))
+            check("rip", "RipIndra", enemy("Rip Indra"))
+            check("doughv2", "KatakuriV2", enemy("Dough King"))
+            check("reaper", "SoulReaper", enemy("Soul Reaper"))
 
-            -- Quét Đảo Kì Bí (Mirage Island)
+            -- Quét các Đảo đặc biệt hệ thống gốc tòa độ
             local loc = workspace:FindFirstChild("_WorldOrigin")
             loc = loc and loc:FindFirstChild("Locations")
             if loc then
                 check("mirage", "Mirage", function()
                     return loc:FindFirstChild("Mirage Island")
                 end)
+                check("volcano", "Volcano", function()
+                    return loc:FindFirstChild("Prehistoric Island") or loc:FindFirstChild("Volcano Island")
+                end)
             end
         end
-
-        task.wait(7) -- Chu kỳ 7 giây cực chuẩn như ảnh của bạn
     end
 end)
 
