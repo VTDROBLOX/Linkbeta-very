@@ -12001,12 +12001,13 @@ end
 StartMainLoops()
 
 
+
 Tabs.Hop:AddSection({"Server Browser"})
 
 local IsHopping = false
 
-Tabs.Hop:AddToggle({
-    Name = "full moon",
+local HopToggle = Tabs.Hop:AddToggle({
+    Name = "Full Moon",
     Default = false,
     Callback = function(Value)
         IsHopping = Value
@@ -12016,6 +12017,7 @@ Tabs.Hop:AddToggle({
             
             task.spawn(function()
                 local count = 0
+                -- Vòng lặp bắt ép spam đúng 100 lần liên tục hoặc dừng khi bạn tắt nút gạt
                 while IsHopping and count < 100 do
                     count = count + 1
                     print("Đang thử kết nối tìm phòng lần thứ: " .. count)
@@ -12050,6 +12052,7 @@ Tabs.Hop:AddToggle({
                             return ok2
                         end
 
+                        -- Gọi request lấy dữ liệu phòng từ Render của bạn
                         local ok, res = pcall(function()
                             return request_fn({
                                 Url = API,
@@ -12088,14 +12091,19 @@ Tabs.Hop:AddToggle({
                         end
                     else
                         warn("Executor không hỗ trợ hàm Request!")
+                        IsHopping = false
+                        if HopToggle then HopToggle:Set(false) end
                         break
                     end
                     
-                    task.wait(0.3)
+                    task.wait(0.3) 
                 end
                 
                 if count >= 100 then
                     IsHopping = false
+                    if HopToggle then
+                        HopToggle:Set(false)
+                    end
                 end
             end)
         else
